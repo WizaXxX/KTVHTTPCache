@@ -116,7 +116,14 @@
         data = [self.readingHandle readDataOfLength:(NSUInteger)MIN(self.downloadLength - self.readedLength, length)];
         self->_readedLength += data.length;
         KTVHCLogDataNetworkSource(@"%p, Read data\nLength : %lld\ndownloadLength : %lld\nreadedLength : %lld", self, (long long)data.length, self.readedLength, self.downloadLength);
-        if (self.readedLength >= self.response.contentLength) {
+        if (data.length == 0 && self.downloadLength > self.readedLength) {
+            // Race: didReceiveData: wrote bytes on the download queue concurrently with this
+            // read on the delegate queue. File handle returned empty because the write wasn't
+            // visible yet. Reset position and schedule a retry via has-available-data.
+            [self.readingHandle seekToFileOffset:self.readedLength];
+            self.callHasAvailableData = YES;
+            [self callbackForHasAvailableData];
+        } else if (self.readedLength >= self.response.contentLength) {
             self->_finished = YES;
             KTVHCLogDataNetworkSource(@"%p, Read data did finished", self);
             [self destoryReadingHandle];
