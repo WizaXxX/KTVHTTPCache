@@ -187,6 +187,11 @@
     [unit workingRelease];
     self.writingHandle = [NSFileHandle fileHandleForWritingAtPath:self.unitItem.absolutePath];
     self.readingHandle = [NSFileHandle fileHandleForReadingAtPath:self.unitItem.absolutePath];
+    NSLog(@"[KTVHCDiag] path=%@ writingHandle=%@ readingHandle=%@ fileExists=%d",
+          self.unitItem.absolutePath,
+          self.writingHandle,
+          self.readingHandle,
+          [[NSFileManager defaultManager] fileExistsAtPath:self.unitItem.absolutePath]);
     [self callbackForPrepared];
     [self unlock];
 }
