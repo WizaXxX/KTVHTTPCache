@@ -21,6 +21,7 @@
 @property (nonatomic, strong) NSFileHandle *writingHandle;
 @property (nonatomic, strong) KTVHCDataUnitItem *unitItem;
 @property (nonatomic, strong) NSURLSessionTask *downlaodTask;
+@property (nonatomic, strong) NSMutableData *downloadBuffer;
 
 @property (nonatomic) long long downloadLength;
 @property (nonatomic) BOOL downloadCalledComplete;
@@ -113,7 +114,13 @@
     }
     NSData *data = nil;
     @try {
-        data = [self.readingHandle readDataOfLength:(NSUInteger)MIN(self.downloadLength - self.readedLength, length)];
+        if (self.downloadBuffer && self.readedLength < (long long)self.downloadBuffer.length) {
+            NSUInteger available = (NSUInteger)(self.downloadBuffer.length - (NSUInteger)self.readedLength);
+            NSUInteger toRead = (NSUInteger)MIN((long long)MIN(available, length), self.downloadLength - self.readedLength);
+            data = [self.downloadBuffer subdataWithRange:NSMakeRange((NSUInteger)self.readedLength, toRead)];
+        } else {
+            data = [self.readingHandle readDataOfLength:(NSUInteger)MIN(self.downloadLength - self.readedLength, length)];
+        }
         self->_readedLength += data.length;
         KTVHCLogDataNetworkSource(@"%p, Read data\nLength : %lld\ndownloadLength : %lld\nreadedLength : %lld", self, (long long)data.length, self.readedLength, self.downloadLength);
         if (data.length == 0 && self.downloadLength > self.readedLength) {
@@ -187,11 +194,7 @@
     [unit workingRelease];
     self.writingHandle = [NSFileHandle fileHandleForWritingAtPath:self.unitItem.absolutePath];
     self.readingHandle = [NSFileHandle fileHandleForReadingAtPath:self.unitItem.absolutePath];
-    NSLog(@"[KTVHCDiag] path=%@ writingHandle=%@ readingHandle=%@ fileExists=%d",
-          self.unitItem.absolutePath,
-          self.writingHandle,
-          self.readingHandle,
-          [[NSFileManager defaultManager] fileExistsAtPath:self.unitItem.absolutePath]);
+    self.downloadBuffer = [NSMutableData data];
     [self callbackForPrepared];
     [self unlock];
 }
@@ -207,8 +210,10 @@
         NSError *error = nil;
         if (@available(iOS 13.0, *)) {
             [self.writingHandle writeData:data error:&error];
+            [self.downloadBuffer appendData:data];
         } else {
             [self.writingHandle writeData:data];
+            [self.downloadBuffer appendData:data];
         }
         if (error) {
             [self callbackForFailed:error];
